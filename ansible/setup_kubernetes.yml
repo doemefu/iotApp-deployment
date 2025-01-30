@@ -1,5 +1,5 @@
 ---
-- hosts: raspberry
+- hosts: localhost
   become: yes
   gather_facts: yes
 

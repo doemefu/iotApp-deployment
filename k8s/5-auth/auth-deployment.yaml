@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: iot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: auth-service
+          image: ghcr.io/your-repo/auth-service:latest
+          env:
+            - name: TZ
+              value: "Europe/Zurich"
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres:5432/authdb"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: global-secrets
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: global-secrets
+                  key: POSTGRES_PASSWORD
+            - name: USER_MANAGEMENT_SERVICE_URL
+              value: "http://user-management-service:8080"
+          ports:
+            - containerPort: 8080

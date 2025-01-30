@@ -1,0 +1,80 @@
+---
+- hosts: raspberry
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Set timezone to Zurich
+      timezone:
+        name: Europe/Zurich
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        force_apt_get: yes
+
+    - name: Upgrade packages
+      apt:
+        upgrade: dist
+        force_apt_get: yes
+      register: upgrade_result
+
+    - name: Check if reboot is required
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Reboot the system if necessary
+      reboot:
+        reboot_timeout: 300
+      when: reboot_required.stat.exists
+
+    - name: Install required dependencies
+      apt:
+        name:
+          - curl
+          - socat
+          - apt-transport-https
+          - ca-certificates
+          - software-properties-common
+        state: present
+
+    - name: Install K3s (lightweight Kubernetes)
+      shell: |
+        curl -sfL https://get.k3s.io | sh -
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Enable and start k3s service
+      service:
+        name: k3s
+        state: started
+        enabled: true
+
+    - name: Download Helm command line tool
+      ansible.builtin.uri:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        return_content: true
+      register: helm_installer
+
+    - name: Install Helm
+      ansible.builtin.command:
+        cmd: bash
+        stdin: "{{ helm_installer.content }}"
+        creates: /usr/local/bin/helm
+      environment:
+        DESIRED_VERSION: "{{ helm_version | default('') }}"
+
+    - name: Deploy cert-manager (if using TLS certificates)
+      shell: |
+        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.yaml
+      args:
+        warn: false
+      when: cert_manager_deployed is not defined
+
+    - name: Wait for cert-manager to become ready
+      shell: kubectl wait --for=condition=Available --timeout=180s deployment/cert-manager -n cert-manager
+      register: cert_manager_deployed
+      failed_when: cert_manager_deployed.rc != 0
+      retries: 3
+      delay: 60

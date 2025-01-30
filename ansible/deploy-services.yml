@@ -1,0 +1,124 @@
+---
+- hosts: raspberry
+  become: yes
+  gather_facts: yes
+
+  vars:
+    ghcr_username: ""  # Your GitHub username
+    ghcr_pat: ""  # Your GitHub Personal Access Token (PAT)
+    INFLUXDB_HOST: "http://influxdb.iot.svc.cluster.local:8086"
+    MOSQUITTO_HOST: "mosquitto.iot.svc.cluster.local"
+    POSTGRES_HOST: "postgres.iot.svc.cluster.local"
+    APP_SERVICES:
+      - name: auth-service
+        url: "http://auth-service.iot.svc.cluster.local:8080/health"
+      - name: user-management-service
+        url: "http://user-management-service.iot.svc.cluster.local:8080/health"
+      - name: device-management-service
+        url: "http://device-management-service.iot.svc.cluster.local:8080/health"
+      - name: data-processing-service
+        url: "http://data-processing-service.iot.svc.cluster.local:8080/health"
+
+  tasks:
+    ##################################################################
+    # 1. Add Helm Repositories
+    ##################################################################
+    - name: Add Jetstack Helm repository (Cert-Manager)
+      shell: helm repo add jetstack https://charts.jetstack.io
+
+    - name: Add Traefik Helm repository
+      shell: helm repo add traefik https://traefik.github.io/charts
+
+    - name: Update Helm repositories
+      shell: helm repo update
+
+    ##################################################################
+    # 2. Install or Upgrade Traefik
+    ##################################################################
+    - name: Install or upgrade Traefik
+      shell: |
+        helm upgrade --install traefik traefik/traefik \
+          --namespace traefik \
+          --create-namespace \
+          --set ports.websecure.tls.enabled=true \
+          --set ingressClass.enabled=true \
+          --set ingressClass.isDefaultClass=true \
+          --set persistence.enabled=false
+          # If you want persistent storage for Traefik (e.g. for logs),
+          # you can override the chart's settings to define a PVC here.
+
+    - name: Wait for Traefik to be ready
+      shell: kubectl wait --for=condition=ready pods --all --namespace traefik --timeout=300s
+
+    ##################################################################
+    # 3. Install or Upgrade Cert-Manager
+    ##################################################################
+    - name: Install or upgrade cert-manager
+      shell: |
+        helm upgrade --install cert-manager jetstack/cert-manager \
+          --namespace cert-manager \
+          --create-namespace \
+          --set installCRDs=true
+
+    - name: Wait for Cert-Manager to be ready
+      shell: kubectl wait --for=condition=ready pods --all --namespace cert-manager --timeout=300s
+
+    ##################################################################
+    # 4. Create GHCR Docker registry secret
+    ##################################################################
+    - name: Create GHCR registry secret in default namespace
+      shell: |
+        kubectl create secret docker-registry ghcr-secret \
+        --docker-server=ghcr.io \
+        --docker-username={{ ghcr_username }} \
+        --docker-password={{ ghcr_pat }} \
+        --namespace iot \
+        || true
+
+    ##################################################################
+    # 5. Create namespaces (example: 'iot' or 'iotApp')
+    ##################################################################
+    - name: Create "iot" namespace
+      shell: kubectl create namespace iot || true
+
+    ##################################################################
+    # 6. Copy K8s manifests to the Raspberry Pi
+    ##################################################################
+    - name: Copy all K8s manifests
+      copy:
+        src: ../k8s/
+        dest: /home/ubuntu/k8s/
+
+    ##################################################################
+    # 7. Start Infrastructure (PostgreSQL, InfluxDB, Mosquitto)
+    ##################################################################
+    - name: Start infrastructure services
+      include_role:
+        name: startInfra
+      vars:
+        POSTGRES_HOST: "{{ POSTGRES_HOST }}"
+        INFLUXDB_HOST: "{{ INFLUXDB_HOST }}"
+        MOSQUITTO_HOST: "{{ MOSQUITTO_HOST }}"
+
+    ##################################################################
+    # 8. Set up InfluxDB Buckets
+    ##################################################################
+    - name: Set up InfluxDB (wait and create buckets)
+      include_role:
+        name: setUpInflux
+
+    ##################################################################
+    # 9. Start Application Services
+    ##################################################################
+    - name: Start all backend application services
+      include_role:
+        name: startApplications
+      vars:
+        APP_SERVICES: "{{ APP_SERVICES }}"
+
+    ##################################################################
+    # 10. Start Frontend Services
+    ##################################################################
+    - name: Start all frontend services
+      include_role:
+        name: startFrontend

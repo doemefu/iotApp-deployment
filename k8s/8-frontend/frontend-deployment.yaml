@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-service
+  namespace: iot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend-service
+  template:
+    metadata:
+      labels:
+        app: frontend-service
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: frontend-service
+          image: ghcr.io/your-repo/frontend-service:latest
+          env:
+            - name: TZ
+              value: "Europe/Zurich"
+          ports:
+            - containerPort: 8080

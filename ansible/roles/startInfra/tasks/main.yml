@@ -1,0 +1,53 @@
+---
+##################################################################
+# 1. Deploy Infrastructure Services
+##################################################################
+- name: Deploy PostgreSQL service
+  shell: kubectl apply -f /home/ubuntu/k8s/1-postgres/ -n iot
+
+- name: Deploy InfluxDB service
+  shell: kubectl apply -f /home/ubuntu/k8s/2-influx/ -n iot
+
+- name: Deploy Mosquitto service
+  shell: kubectl apply -f /home/ubuntu/k8s/3-mosquitto/ -n iot
+
+##################################################################
+# 2. Wait for pods to be ready
+##################################################################
+- name: Wait for infrastructure services to be ready
+  shell: kubectl wait --for=condition=ready pod --all -n iot --timeout=300s
+
+##################################################################
+# 3. Check for Mosquitto to be up and healthy
+##################################################################
+- name: "Check for Mosquitto to be up and healthy"
+  shell: "timeout 1 mosquitto_sub -h {{ MOSQUITTO_HOST }} -p 1883 -t 'probe/topic' -E -i probe"
+  register: mosquitto_ready
+  until: mosquitto_ready.rc == 0
+  retries: 30
+  delay: 5
+  changed_when: false
+
+##################################################################
+# 4. Check for InfluxDB to be up and healthy
+##################################################################
+- name: "Check for InfluxDB to be up and healthy"
+  uri:
+    url: "{{ INFLUXDB_HOST }}/ping"
+    method: GET
+    status_code: 204
+  register: influx_ready
+  until: influx_ready.status == 204
+  retries: 20
+  delay: 5
+
+##################################################################
+# 5. Check for PostgreSQL to be up and healthy
+##################################################################
+- name: "Check for PostgreSQL to be up and healthy"
+  shell: "PGUSER=postgres pg_isready -h {{ POSTGRES_HOST }} -d pangea_local_dev"
+  register: pg_ready
+  until: pg_ready.rc == 0
+  retries: 30
+  delay: 5
+  changed_when: false

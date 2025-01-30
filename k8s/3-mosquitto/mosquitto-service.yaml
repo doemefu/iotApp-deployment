@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: iot
+spec:
+  ports:
+    - port: 1883
+      targetPort: 1883
+    - port: 9001
+      targetPort: 9001
+  selector:
+    app: mosquitto

@@ -1,0 +1,6 @@
+---
+- name: Deploy PostgreSQL service
+  shell: kubectl apply -f /home/ubuntu/k8s/8-frontend/ -n iot
+
+- name: Wait for infrastructure services to be ready
+  shell: kubectl wait --for=condition=ready pod --all -n iot --timeout=300s

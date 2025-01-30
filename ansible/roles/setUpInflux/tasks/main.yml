@@ -1,0 +1,46 @@
+---
+- name: Wait for InfluxDB to be healthy
+  uri:
+    url: "http://influxdb.iot.svc.cluster.local:8086/health"
+    method: GET
+    return_content: yes
+    status_code: 200
+  register: health_check
+  until: health_check.json.status == "pass"
+  retries: 20
+  delay: 5
+
+- name: Fetch Organization ID from InfluxDB
+  uri:
+    url: "http://influxdb.iot.svc.cluster.local:8086/api/v2/orgs"
+    method: GET
+    headers:
+      Authorization: "Token {{ lookup('file', '/run/secrets/influxdb2-admin-token') }}"
+    return_content: yes
+    status_code: 200
+  register: org_response
+
+- name: Extract Organization ID
+  set_fact:
+    org_id: "{{ org_response.json.orgs | selectattr('name', 'equalto', DOCKER_INFLUXDB_INIT_ORG) | map(attribute='id') | first }}"
+
+- name: Create InfluxDB Buckets
+  uri:
+    url: "http://influxdb.iot.svc.cluster.local:8086/api/v2/buckets"
+    method: POST
+    headers:
+      Authorization: "Token {{ lookup('file', '/run/secrets/influxdb2-admin-token') }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      name: "{{ item }}"
+      orgID: "{{ org_id }}"
+      retentionRules: []
+    status_code:
+      - 201  # Created
+      - 409  # Conflict (bucket already exists)
+  loop:
+    - auth-service
+    - user-management-service
+    - device-management-service
+    - data-processing-service

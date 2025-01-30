@@ -1,0 +1,27 @@
+---
+- name: Deploy user management service
+  shell: kubectl apply -f /home/ubuntu/k8s/4-user-management/ -n iot
+
+- name: Deploy auth service
+  shell: kubectl apply -f /home/ubuntu/k8s/5-auth/ -n iot
+
+- name: Deploy device management service
+  shell: kubectl apply -f /home/ubuntu/k8s/6-device-management/ -n iot
+
+- name: Deploy data processing service
+  shell: kubectl apply -f /home/ubuntu/k8s/7-data-processing/ -n iot
+
+- name: Wait for infrastructure services to be ready
+  shell: kubectl wait --for=condition=ready pod --all -n iot --timeout=300s
+
+- name: "Wait for application services readiness"
+  uri:
+    url: "{{ item.url }}"
+    method: GET
+    return_content: yes
+    status_code: 200
+  register: app_ready
+  until: app_ready.status == 200
+  retries: 30
+  delay: 5
+  loop: "{{ APP_SERVICES }}"

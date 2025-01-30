@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reverse-proxy
+  namespace: iot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reverse-proxy
+  template:
+    metadata:
+      labels:
+        app: reverse-proxy
+    spec:
+      containers:
+        - name: traefik
+          image: traefik:v3.3
+          args:
+            - "--entrypoints.web.address=:80"               # HTTP entrypoint
+            - "--entrypoints.websecure.address=:443"        # HTTPS entrypoint
+            - "--certificatesresolvers.letsencrypt.acme.email=info@furchert.ch"
+            - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
+            - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+            - "--providers.kubernetescrd"
+            - "--providers.kubernetesingress"
+          ports:
+            - containerPort: 80
+            - containerPort: 443
+          volumeMounts:
+            - name: traefik-config
+              mountPath: /etc/traefik/traefik.yml
+              subPath: traefik.yml
+            - name: traefik-acme
+              mountPath: /acme.json
+      volumes:
+        - name: traefik-config
+          hostPath:
+            path: /path/to/traefik/traefik.yml
+        - name: traefik-acme
+          hostPath:
+            path: /path/to/acme.json

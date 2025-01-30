@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: device-management-service
+  namespace: iot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: device-management-service
+  template:
+    metadata:
+      labels:
+        app: device-management-service
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+      - name: device-management-service
+        image: ghcr.io/your-repo/device-management-service:latest
+        env:
+        - name: TZ
+          value: "Europe/Zurich"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres:5432/iotdb"
+        - name: MQTT_BROKER_HOST
+          value: "mosquitto"
+        - name: MQTT_BROKER_PORT
+          value: "1883"
+        ports:
+        - containerPort: 8080

@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-management-service
+  namespace: iot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-management-service
+  template:
+    metadata:
+      labels:
+        app: user-management-service
+    spec:
+      containers:
+      - name: user-management-service
+        image: ghcr.io/your-repo/user-management-service:latest
+        env:
+        - name: TZ
+          value: "Europe/Zurich"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres:5432/iotdb"
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: global-secrets
+              key: POSTGRES_USER
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: global-secrets
+              key: POSTGRES_PASSWORD
+        - name: INFLUX_URL
+          value: "http://influxdb:8086"
+        - name: INFLUX_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: global-secrets
+              key: USER_MANAGEMENT_BUCKET
+        - name: INFLUX_ORG
+          valueFrom:
+            secretKeyRef:
+              name: global-secrets
+              key: INFLUX_ORG
+        - name: INFLUX_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: global-secrets
+              key: INFLUX_TOKEN
+        ports:
+        - containerPort: 8080

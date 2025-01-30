@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-processing-service
+  namespace: iot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-processing-service
+  template:
+    metadata:
+      labels:
+        app: data-processing-service
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: data-processing-service
+          image: ghcr.io/your-repo/data-processing-service:latest
+          env:
+            - name: TZ
+              value: "Europe/Zurich"
+            - name: INFLUXDB_URL
+              value: "http://influxdb:8086"
+            - name: INFLUXDB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: global-secrets
+                  key: INFLUX_TOKEN
+            - name: INFLUXDB_ORG
+              valueFrom:
+                secretKeyRef:
+                  name: global-secrets
+                  key: INFLUX_ORG
+            - name: INFLUXDB_BUCKET
+              value: "iot-bucket"
+          ports:
+            - containerPort: 8080

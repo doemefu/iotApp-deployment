@@ -28,6 +28,7 @@
         name: repo
         state: present
         update_repo_cache: true
+        release_namespace: default
 
     ##################################################################
     # 2. Install or Upgrade Traefik

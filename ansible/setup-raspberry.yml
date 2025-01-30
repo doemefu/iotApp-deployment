@@ -3,7 +3,15 @@
   become: yes
   gather_facts: yes
 
+  vars:
+    k3s_install_url: "https://get.k3s.io"
+    helm_script_url: "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3"
+    cert_manager_url: "https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml"
+
   tasks:
+    ##################################################################
+    # 1. Configure Raspberry Pi Environment
+    ##################################################################
     - name: Set timezone to Zurich
       timezone:
         name: Europe/Zurich
@@ -39,9 +47,11 @@
           - software-properties-common
         state: present
 
-    - name: Install K3s (lightweight Kubernetes)
-      shell: |
-        curl -sfL https://get.k3s.io | sh -
+    ##################################################################
+    # 2. Install & Start K3s (Lightweight Kubernetes)
+    ##################################################################
+    - name: Install K3s
+      ansible.builtin.shell: "curl -sfL {{ k3s_install_url }} | sh -"
       args:
         creates: /usr/local/bin/k3s
 
@@ -51,9 +61,12 @@
         state: started
         enabled: true
 
+    ##################################################################
+    # 3. Install Helm
+    ##################################################################
     - name: Download Helm command line tool
       ansible.builtin.uri:
-        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        url: "{{ helm_script_url }}"
         return_content: true
       register: helm_installer
 
@@ -65,16 +78,3 @@
       environment:
         DESIRED_VERSION: "{{ helm_version | default('') }}"
 
-    - name: Deploy cert-manager (if using TLS certificates)
-      shell: |
-        kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.yaml
-      args:
-        warn: false
-      when: cert_manager_deployed is not defined
-
-    - name: Wait for cert-manager to become ready
-      shell: kubectl wait --for=condition=Available --timeout=180s deployment/cert-manager -n cert-manager
-      register: cert_manager_deployed
-      failed_when: cert_manager_deployed.rc != 0
-      retries: 3
-      delay: 60

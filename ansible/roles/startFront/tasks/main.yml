@@ -1,6 +1,21 @@
 ---
-- name: Deploy PostgreSQL service
-  shell: kubectl apply -f /home/ubuntu/k8s/8-frontend/ -n iot
+##################################################################
+# 1. Deploy Frontend Services
+##################################################################
+- name: Deploy frontend service
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    definition: "{{ lookup('file', '/home/ubuntu/k8s/8-frontend/frontend-deployment.yaml') | from_yaml }}"
 
-- name: Wait for infrastructure services to be ready
-  shell: kubectl wait --for=condition=ready pod --all -n iot --timeout=300s
+##################################################################
+# 2. Wait for Frontend Services to be Ready
+##################################################################
+- name: Wait for frontend services to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: iot
+  register: frontend_pods
+  until: frontend_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 1
+  retries: 30
+  delay: 5

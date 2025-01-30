@@ -21,65 +21,31 @@
 
   tasks:
     ##################################################################
-    # 1. Add Helm Repositories
-    ##################################################################
-    - name: Add Jetstack Helm repository (Cert-Manager)
-      shell: helm repo add jetstack https://charts.jetstack.io
-
-    - name: Add Traefik Helm repository
-      shell: helm repo add traefik https://traefik.github.io/charts
-
-    - name: Update Helm repositories
-      shell: helm repo update
-
-    ##################################################################
-    # 2. Install or Upgrade Traefik
-    ##################################################################
-    - name: Install or upgrade Traefik
-      shell: |
-        helm upgrade --install traefik traefik/traefik \
-          --namespace traefik \
-          --create-namespace \
-          --set ports.websecure.tls.enabled=true \
-          --set ingressClass.enabled=true \
-          --set ingressClass.isDefaultClass=true \
-          --set persistence.enabled=false
-          # If you want persistent storage for Traefik (e.g. for logs),
-          # you can override the chart's settings to define a PVC here.
-
-    - name: Wait for Traefik to be ready
-      shell: kubectl wait --for=condition=ready pods --all --namespace traefik --timeout=300s
-
-    ##################################################################
-    # 3. Install or Upgrade Cert-Manager
-    ##################################################################
-    - name: Install or upgrade cert-manager
-      shell: |
-        helm upgrade --install cert-manager jetstack/cert-manager \
-          --namespace cert-manager \
-          --create-namespace \
-          --set installCRDs=true
-
-    - name: Wait for Cert-Manager to be ready
-      shell: kubectl wait --for=condition=ready pods --all --namespace cert-manager --timeout=300s
-
-    ##################################################################
-    # 4. Create GHCR Docker registry secret
+    # 4. Create GHCR Docker Registry Secret
     ##################################################################
     - name: Create GHCR registry secret in default namespace
-      shell: |
-        kubectl create secret docker-registry ghcr-secret \
-        --docker-server=ghcr.io \
-        --docker-username={{ ghcr_username }} \
-        --docker-password={{ ghcr_pat }} \
-        --namespace iot \
-        || true
+      kubernetes.core.k8s:
+        state: present
+        namespace: iot
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: ghcr-secret
+            namespace: iot
+          type: kubernetes.io/dockerconfigjson
+          data:
+            .dockerconfigjson: "{{ lookup('template', 'dockerconfig.json.j2') | b64encode }}"
 
     ##################################################################
     # 5. Create namespaces (example: 'iot' or 'iotApp')
     ##################################################################
-    - name: Create "iot" namespace
-      shell: kubectl create namespace iot || true
+    - name: Ensure "iot" namespace exists
+      kubernetes.core.k8s:
+        name: iot
+        api_version: v1
+        kind: Namespace
+        state: present
 
     ##################################################################
     # 6. Copy K8s manifests to the Raspberry Pi

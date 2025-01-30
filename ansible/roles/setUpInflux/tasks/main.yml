@@ -40,7 +40,7 @@
       - 201  # Created
       - 409  # Conflict (bucket already exists)
   loop:
-    - auth-service
-    - user-management-service
-    - device-management-service
-    - data-processing-service
+    - auth
+    - user-management
+    - device-management
+    - data-processing

@@ -1,19 +1,46 @@
 ---
+##################################################################
+# 1. Deploy Application Services
+##################################################################
 - name: Deploy user management service
-  shell: kubectl apply -f /home/ubuntu/k8s/4-user-management/ -n iot
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    definition: "{{ lookup('file', '/home/ubuntu/k8s/4-user-management/deployment.yaml') | from_yaml }}"
 
 - name: Deploy auth service
-  shell: kubectl apply -f /home/ubuntu/k8s/5-auth/ -n iot
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    definition: "{{ lookup('file', '/home/ubuntu/k8s/5-auth/deployment.yaml') | from_yaml }}"
 
 - name: Deploy device management service
-  shell: kubectl apply -f /home/ubuntu/k8s/6-device-management/ -n iot
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    definition: "{{ lookup('file', '/home/ubuntu/k8s/6-device-management/deployment.yaml') | from_yaml }}"
 
 - name: Deploy data processing service
-  shell: kubectl apply -f /home/ubuntu/k8s/7-data-processing/ -n iot
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    definition: "{{ lookup('file', '/home/ubuntu/k8s/7-data-processing/deployment.yaml') | from_yaml }}"
 
-- name: Wait for infrastructure services to be ready
-  shell: kubectl wait --for=condition=ready pod --all -n iot --timeout=300s
+##################################################################
+# 2. Wait for Application Services to be Ready
+##################################################################
+- name: Wait for application services to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: iot
+  register: app_pods
+  until: app_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 2
+  retries: 30
+  delay: 5
 
+##################################################################
+# 3. Check Application Readiness via HTTP Health Endpoint
+##################################################################
 - name: "Wait for application services readiness"
   uri:
     url: "{{ item.url }}"

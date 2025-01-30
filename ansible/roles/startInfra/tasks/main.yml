@@ -3,19 +3,34 @@
 # 1. Deploy Infrastructure Services
 ##################################################################
 - name: Deploy PostgreSQL service
-  shell: kubectl apply -f /home/ubuntu/k8s/1-postgres/ -n iot
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    definition: "{{ lookup('file', '/home/ubuntu/k8s/1-postgres/postgres-deployment.yaml') | from_yaml }}"
 
 - name: Deploy InfluxDB service
-  shell: kubectl apply -f /home/ubuntu/k8s/2-influx/ -n iot
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    definition: "{{ lookup('file', '/home/ubuntu/k8s/2-influx/influx-deployment.yaml') | from_yaml }}"
 
 - name: Deploy Mosquitto service
-  shell: kubectl apply -f /home/ubuntu/k8s/3-mosquitto/ -n iot
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    definition: "{{ lookup('file', '/home/ubuntu/k8s/3-mosquitto/mosquitto-deployment.yaml') | from_yaml }}"
 
 ##################################################################
-# 2. Wait for pods to be ready
+# 2. Wait for infrastructure services to be ready
 ##################################################################
-- name: Wait for infrastructure services to be ready
-  shell: kubectl wait --for=condition=ready pod --all -n iot --timeout=300s
+- name: Wait for all infrastructure pods to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: iot
+  register: infra_pods
+  until: infra_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 2
+  retries: 30
+  delay: 5
 
 ##################################################################
 # 3. Check for Mosquitto to be up and healthy

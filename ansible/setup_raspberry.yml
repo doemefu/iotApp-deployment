@@ -4,10 +4,9 @@
   gather_facts: yes
 
   vars:
-    k3s_install_url: "https://get.k3s.io"
-    helm_script_url: "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3"
-    cert_manager_url: "https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml"
-    k3s_user: "k3sadmin"
+    k3s_install_script: "https://get.k3s.io"
+    k3s_bin_url: "https://github.com/k3s-io/k3s/releases/download/v1.32.1%2Bk3s1/k3s-arm64"
+    k3s_service_file_url: "https://raw.githubusercontent.com/k3s-io/k3s/master/k3s.service"
 
   tasks:
     ##################################################################
@@ -55,101 +54,49 @@
         state: present
 
     ##################################################################
-    # 2. Create a dedicated user for K3s management
+    # 2. Install K3s (Manual Download instead of curl | sh)
     ##################################################################
-    - name: Create K3s admin user
-      ansible.builtin.user:
-        name: "{{ k3s_user }}"
-        groups: sudo
-        shell: /bin/bash
-        create_home: yes
+    - name: Download K3s installation script
+      get_url:
+        url: "{{ k3s_install_script }}"
+        dest: /tmp/k3s_install.sh
+        mode: '0755'
 
-#    - name: Add K3s user to the 'docker' group (needed for container access)
-#      ansible.builtin.user:
-#        name: "{{ k3s_user }}"
-#        groups: docker
-#        append: yes
-
-    - name: Ensure rancher group exists
-      ansible.builtin.group:
-        name: rancher
-        state: present
-
-    - name: Add K3s user to 'rancher' group for kubeconfig access
-      ansible.builtin.user:
-        name: "{{ k3s_user }}"
-        groups: rancher
-        append: yes
-
-    - name: Allow K3s user to run sudo without a password (optional)
-      ansible.builtin.lineinfile:
-        path: /etc/sudoers.d/{{ k3s_user }}
-        line: "{{ k3s_user }} ALL=(ALL) NOPASSWD:ALL"
-        create: yes
-        validate: 'visudo -cf %s'
-
-    - name: Set KUBECONFIG environment variable for the K3s user
-      ansible.builtin.lineinfile:
-        path: "/home/{{ k3s_user }}/.bashrc"
-        line: "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml"
-        create: yes
-
-    - name: Ensure K3s Kubeconfig is accessible to K3s user
-      ansible.builtin.file:
-        path: /etc/rancher/k3s/k3s.yaml
-        owner: "{{ k3s_user }}"
-        group: rancher
-        mode: '0644'
-
-    ##################################################################
-    # 3. Install & Start K3s (Lightweight Kubernetes)
-    ##################################################################
-    - name: Install K3s
-      ansible.builtin.shell: "curl -sfL {{ k3s_install_url }} | sh -"
+    - name: Run K3s installation script
+      command: /tmp/k3s_install.sh
       args:
         creates: /usr/local/bin/k3s
 
-    - name: Enable and start k3s service
+    - name: Enable and start K3s service
       service:
         name: k3s
         state: started
         enabled: true
 
     ##################################################################
-    # 4. Grant K3s user permission to use kubectl
+    # 3. Install Helm from Official Apt Repo (No piping from net)
     ##################################################################
-    - name: Ensure K3s Kubeconfig is accessible to K3s user
-      ansible.builtin.file:
-        path: /etc/rancher/k3s/k3s.yaml
-        owner: "{{ k3s_user }}"
-        group: rancher
-        mode: '0644'
+    - name: Add GPG key for Helm
+      apt_key:
+        url: "https://baltocdn.com/helm/signing.asc"
+        state: present
 
-    - name: Set KUBECONFIG environment variable for the K3s user
-      ansible.builtin.lineinfile:
-        path: "/home/{{ k3s_user }}/.bashrc"
-        line: "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml"
-        create: yes
+    - name: Add official Helm apt repository
+      apt_repository:
+        repo: "deb https://baltocdn.com/helm/stable/debian/ all main"
+        state: present
 
-    ##################################################################
-    # 5. Install Helm
-    ##################################################################
-    - name: Download Helm command line tool
-      ansible.builtin.uri:
-        url: "{{ helm_script_url }}"
-        return_content: true
-      register: helm_installer
+    - name: Update apt cache (post-Helm repo add)
+      apt:
+        update_cache: yes
 
     - name: Install Helm
-      ansible.builtin.command:
-        cmd: bash
-        stdin: "{{ helm_installer.content }}"
-        creates: /usr/local/bin/helm
-      environment:
-        DESIRED_VERSION: "{{ helm_version | default('') }}"
+      apt:
+        name: helm
+        state: present
 
     ##################################################################
-    # 6. Health Check: Ensure K3s is Running
+    # 4. Health Check: Ensure K3s is Running
     ##################################################################
     - name: Wait for K3s API Server to be ready
       ansible.builtin.command: kubectl cluster-info

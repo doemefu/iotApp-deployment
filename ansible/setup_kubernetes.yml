@@ -3,21 +3,23 @@
   become: yes
   gather_facts: yes
 
+  vars:
+    # Example pinned chart versions. Adjust as needed:
+    cert_manager_chart_version: "1.16.3"
+    prometheus_chart_version: "68.4.4"
+
+    # Where K3s placed the kubeconfig:
+    kubeconfig_path: "/etc/rancher/k3s/k3s.yaml"
+
   tasks:
 
     ##################################################################
     # 1. Add and Update Helm Repositories
     ##################################################################
-    - name: Add or Update Helm repositories
+    - name: Add or Update Helm repository for Jetstack
       kubernetes.core.helm_repository:
         name: jetstack
         repo_url: "https://charts.jetstack.io"
-        force_update: true
-
-    - name: Add or Update Traefik Helm repository
-      kubernetes.core.helm_repository:
-        name: traefik
-        repo_url: "https://traefik.github.io/charts"
         force_update: true
 
     - name: Add or Update Prometheus Helm repository
@@ -27,116 +29,36 @@
         force_update: true
 
     ##################################################################
-    # 2. Install or Upgrade Traefik
-    ##################################################################
-    - name: Install or upgrade Traefik
-      become: yes
-      become_user: k3sadmin
-      kubernetes.core.helm:
-        name: traefik
-        chart_ref: traefik/traefik
-        release_namespace: traefik
-        create_namespace: true
-        state: present
-        values:
-          ports:
-            websecure:
-              tls:
-                enabled: true
-          ingressClass:
-            enabled: true
-            isDefaultClass: true
-          persistence:
-            enabled: false  # Modify for persistent storage if needed
-
-    - name: Wait for Traefik to be ready
-      kubernetes.core.k8s_info:
-        kind: Deployment
-        namespace: traefik
-        name: traefik
-      register: traefik_status
-      until: (traefik_status.resources | length > 0) and
-        (traefik_status.resources[0].status.availableReplicas is defined and
-        traefik_status.resources[0].status.availableReplicas > 0)
-      retries: 10
-      delay: 15
-
-    ##################################################################
     # 3. Install or Upgrade Cert-Manager
     ##################################################################
     - name: Install or upgrade cert-manager
-      become: yes
-      become_user: k3sadmin
       kubernetes.core.helm:
         name: cert-manager
         chart_ref: jetstack/cert-manager
+        chart_version: "{{ cert_manager_chart_version }}"
         release_namespace: cert-manager
         create_namespace: true
         state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        wait: true
         values:
-          installCRDs: true
-
-    - name: Wait for Cert-Manager to be ready
-      kubernetes.core.k8s_info:
-        kind: Deployment
-        namespace: cert-manager
-        name: cert-manager
-      register: cert_manager_status
-      until: (cert_manager_status.resources | length > 0) and
-        (cert_manager_status.resources[0].status.availableReplicas is defined and
-        cert_manager_status.resources[0].status.availableReplicas > 0)
-      retries: 10
-      delay: 15
+          crds:
+            enabled: true
 
     ##################################################################
     # 4. Install Prometheus & Grafana
     ##################################################################
     - name: Install Prometheus
-      become: yes
-      become_user: k3sadmin
       kubernetes.core.helm:
         name: prometheus
         chart_ref: prometheus-community/kube-prometheus-stack
+        chart_version: "{{ prometheus_chart_version }}"
         release_namespace: monitoring
         create_namespace: true
         state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        wait: true
         values:
           prometheus:
             prometheusSpec:
               serviceMonitorSelector: {}
-
-    - name: Wait for Prometheus to be ready
-      kubernetes.core.k8s_info:
-        kind: Deployment
-        namespace: monitoring
-        name: prometheus-kube-prometheus-prometheus
-      register: prometheus_status
-      until: (prometheus_status.resources | length > 0) and
-        (prometheus_status.resources[0].status.availableReplicas is defined and
-        prometheus_status.resources[0].status.availableReplicas > 0)
-      retries: 10
-      delay: 15
-
-    - name: Install Grafana
-      become: yes
-      become_user: k3sadmin
-      kubernetes.core.helm:
-        name: grafana
-        chart_ref: prometheus-community/grafana
-        release_namespace: monitoring
-        create_namespace: true
-        state: present
-        values:
-          adminPassword: "admin"
-
-    - name: Wait for Grafana to be ready
-      kubernetes.core.k8s_info:
-        kind: Deployment
-        namespace: monitoring
-        name: grafana
-      register: grafana_status
-      until: (grafana_status.resources | length > 0) and
-        (grafana_status.resources[0].status.availableReplicas is defined and
-        grafana_status.resources[0].status.availableReplicas > 0)
-      retries: 10
-      delay: 15

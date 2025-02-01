@@ -1,4 +1,4 @@
 ---
 - import_playbook: setup_raspberry.yml
 - import_playbook: setup_kubernetes.yml
-- import_playbook: deploy_services.yml
+#- import_playbook: deploy_services.yml

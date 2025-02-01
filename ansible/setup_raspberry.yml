@@ -1,5 +1,5 @@
 ---
-- hosts: localhost
+- hosts: raspberry
   become: yes
   gather_facts: yes
 
@@ -7,6 +7,7 @@
     k3s_install_url: "https://get.k3s.io"
     helm_script_url: "https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3"
     cert_manager_url: "https://github.com/cert-manager/cert-manager/releases/download/v1.16.3/cert-manager.yaml"
+    k3s_user: "k3sadmin"
 
   tasks:
     ##################################################################
@@ -37,6 +38,12 @@
         reboot_timeout: 300
       when: reboot_required.stat.exists
 
+    - name: Wait for server to come back after reboot
+      wait_for_connection:
+        delay: 15
+        timeout: 300
+      when: reboot_required.stat.exists
+
     - name: Install required dependencies
       apt:
         name:
@@ -48,7 +55,54 @@
         state: present
 
     ##################################################################
-    # 2. Install & Start K3s (Lightweight Kubernetes)
+    # 2. Create a dedicated user for K3s management
+    ##################################################################
+    - name: Create K3s admin user
+      ansible.builtin.user:
+        name: "{{ k3s_user }}"
+        groups: sudo
+        shell: /bin/bash
+        create_home: yes
+
+#    - name: Add K3s user to the 'docker' group (needed for container access)
+#      ansible.builtin.user:
+#        name: "{{ k3s_user }}"
+#        groups: docker
+#        append: yes
+
+    - name: Ensure rancher group exists
+      ansible.builtin.group:
+        name: rancher
+        state: present
+
+    - name: Add K3s user to 'rancher' group for kubeconfig access
+      ansible.builtin.user:
+        name: "{{ k3s_user }}"
+        groups: rancher
+        append: yes
+
+    - name: Allow K3s user to run sudo without a password (optional)
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers.d/{{ k3s_user }}
+        line: "{{ k3s_user }} ALL=(ALL) NOPASSWD:ALL"
+        create: yes
+        validate: 'visudo -cf %s'
+
+    - name: Set KUBECONFIG environment variable for the K3s user
+      ansible.builtin.lineinfile:
+        path: "/home/{{ k3s_user }}/.bashrc"
+        line: "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml"
+        create: yes
+
+    - name: Ensure K3s Kubeconfig is accessible to K3s user
+      ansible.builtin.file:
+        path: /etc/rancher/k3s/k3s.yaml
+        owner: "{{ k3s_user }}"
+        group: rancher
+        mode: '0644'
+
+    ##################################################################
+    # 3. Install & Start K3s (Lightweight Kubernetes)
     ##################################################################
     - name: Install K3s
       ansible.builtin.shell: "curl -sfL {{ k3s_install_url }} | sh -"
@@ -62,7 +116,23 @@
         enabled: true
 
     ##################################################################
-    # 3. Install Helm
+    # 4. Grant K3s user permission to use kubectl
+    ##################################################################
+    - name: Ensure K3s Kubeconfig is accessible to K3s user
+      ansible.builtin.file:
+        path: /etc/rancher/k3s/k3s.yaml
+        owner: "{{ k3s_user }}"
+        group: rancher
+        mode: '0644'
+
+    - name: Set KUBECONFIG environment variable for the K3s user
+      ansible.builtin.lineinfile:
+        path: "/home/{{ k3s_user }}/.bashrc"
+        line: "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml"
+        create: yes
+
+    ##################################################################
+    # 5. Install Helm
     ##################################################################
     - name: Download Helm command line tool
       ansible.builtin.uri:
@@ -78,3 +148,25 @@
       environment:
         DESIRED_VERSION: "{{ helm_version | default('') }}"
 
+    ##################################################################
+    # 6. Health Check: Ensure K3s is Running
+    ##################################################################
+    - name: Wait for K3s API Server to be ready
+      ansible.builtin.command: kubectl cluster-info
+      register: k3s_status
+      until: k3s_status.rc == 0
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    - name: Ensure K3s systemd service is running
+      ansible.builtin.systemd:
+        name: k3s
+        state: started
+        enabled: true
+      register: k3s_service_status
+
+    - name: Fail if K3s is not running
+      ansible.builtin.fail:
+        msg: "K3s service is not running!"
+      when: k3s_service_status.status.ActiveState != "active"

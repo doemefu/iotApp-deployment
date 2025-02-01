@@ -1,5 +1,5 @@
 ---
-- hosts: localhost
+- hosts: raspberry
   become: yes
   gather_facts: yes
 
@@ -24,6 +24,8 @@
     # 4. Create GHCR Docker Registry Secret
     ##################################################################
     - name: Create GHCR registry secret in default namespace
+      become: yes
+      become_user: k3sadmin
       kubernetes.core.k8s:
         state: present
         namespace: iot
@@ -41,6 +43,8 @@
     # 5. Create namespaces (example: 'iot' or 'iotApp')
     ##################################################################
     - name: Ensure "iot" namespace exists
+      become: yes
+      become_user: k3sadmin
       kubernetes.core.k8s:
         name: iot
         api_version: v1

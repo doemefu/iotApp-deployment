@@ -1,5 +1,5 @@
 ---
-- hosts: localhost
+- hosts: raspberry
   become: yes
   gather_facts: yes
 
@@ -8,32 +8,30 @@
     ##################################################################
     # 1. Add and Update Helm Repositories
     ##################################################################
-    - name: Add Jetstack Helm repository (Cert-Manager)
+    - name: Add or Update Helm repositories
       kubernetes.core.helm_repository:
         name: jetstack
         repo_url: "https://charts.jetstack.io"
+        force_update: true
 
-    - name: Add Traefik Helm repository
+    - name: Add or Update Traefik Helm repository
       kubernetes.core.helm_repository:
         name: traefik
         repo_url: "https://traefik.github.io/charts"
+        force_update: true
 
-    - name: Add Prometheus Helm repository
+    - name: Add or Update Prometheus Helm repository
       kubernetes.core.helm_repository:
         name: prometheus-community
         repo_url: "https://prometheus-community.github.io/helm-charts"
-
-    - name: Update Helm repositories
-      kubernetes.core.helm:
-        name: repo
-        state: present
-        update_repo_cache: true
-        release_namespace: default
+        force_update: true
 
     ##################################################################
     # 2. Install or Upgrade Traefik
     ##################################################################
     - name: Install or upgrade Traefik
+      become: yes
+      become_user: k3sadmin
       kubernetes.core.helm:
         name: traefik
         chart_ref: traefik/traefik
@@ -67,6 +65,8 @@
     # 3. Install or Upgrade Cert-Manager
     ##################################################################
     - name: Install or upgrade cert-manager
+      become: yes
+      become_user: k3sadmin
       kubernetes.core.helm:
         name: cert-manager
         chart_ref: jetstack/cert-manager
@@ -92,6 +92,8 @@
     # 4. Install Prometheus & Grafana
     ##################################################################
     - name: Install Prometheus
+      become: yes
+      become_user: k3sadmin
       kubernetes.core.helm:
         name: prometheus
         chart_ref: prometheus-community/kube-prometheus-stack
@@ -116,6 +118,8 @@
       delay: 15
 
     - name: Install Grafana
+      become: yes
+      become_user: k3sadmin
       kubernetes.core.helm:
         name: grafana
         chart_ref: prometheus-community/grafana

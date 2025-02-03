@@ -1,0 +1,13 @@
+# file: certificate-local-ip.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: local-ip-certificate
+  namespace: kube-system
+spec:
+  secretName: local-ip-tls     # The TLS secret that will contain the cert/key
+  issuerRef:
+    name: local-selfsigned     # Reference the self-signed ClusterIssuer
+    kind: ClusterIssuer
+  dnsNames:
+    - "raspi5.local"

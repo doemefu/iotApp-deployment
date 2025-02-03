@@ -1,0 +1,88 @@
+---
+- hosts: k3s_cluster
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # Example pinned chart versions. Adjust as needed:
+    cert_manager_chart_version: "1.16.3"
+    prometheus_chart_version: "68.4.4"
+
+    # Where K3s placed the kubeconfig:
+    kubeconfig_path: "/etc/rancher/k3s/k3s.yaml"
+
+  tasks:
+
+    ##################################################################
+    # 1. Add and Update Helm Repositories
+    ##################################################################
+    - name: Add or Update Helm repository for Jetstack
+      kubernetes.core.helm_repository:
+        name: jetstack
+        repo_url: "https://charts.jetstack.io"
+        force_update: true
+
+    - name: Add or Update Prometheus Helm repository
+      kubernetes.core.helm_repository:
+        name: prometheus-community
+        repo_url: "https://prometheus-community.github.io/helm-charts"
+        force_update: true
+
+    ##################################################################
+    # 2. Install or Upgrade Cert-Manager
+    ##################################################################
+    - name: Install or upgrade cert-manager
+      kubernetes.core.helm:
+        release_name: cert-manager
+        chart_ref: jetstack/cert-manager
+        #chart_version: "{{ cert_manager_chart_version }}"
+        release_namespace: cert-manager
+        create_namespace: true
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        wait: true
+        values:
+          crds:
+            enabled: true
+
+    ##################################################################
+    # 3. Install Prometheus & Grafana
+    ##################################################################
+    - name: Install kube-prometheus-stack chart
+      kubernetes.core.helm:
+        name: prometheus
+        chart_ref: prometheus-community/kube-prometheus-stack
+        chart_version: "{{ prometheus_chart_version }}"
+        release_namespace: kube-system
+        create_namespace: true
+        state: present
+        kubeconfig: "{{ kubeconfig_path }}"
+        wait: true
+
+        # 'values' for subpath serving of Grafana
+        values:
+          # Configure Grafana to serve from /grafana
+          grafana:
+            grafana.ini:
+              server:
+                # Tells Grafana it's served at /grafana so all links use that subpath
+                root_url: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
+                serve_from_sub_path: "true"
+
+            # Enable the chart's built-in Ingress for Grafana
+            ingress:
+              enabled: true
+              annotations:
+                # In K3s, the default Traefik typically uses this annotation
+                kubernetes.io/ingress.class: "traefik"
+              hosts:
+                - raspi5.local
+              path: /grafana
+              pathType: Prefix
+
+          # Optionally open up the ServiceMonitor selector if needed
+          prometheus:
+            prometheusSpec:
+              serviceMonitorSelector: { }
+
+

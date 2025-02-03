@@ -1,5 +1,5 @@
 ---
-- hosts: raspberry
+- hosts: k3s_cluster
   become: yes
   gather_facts: yes
 
@@ -51,69 +51,13 @@
           - apt-transport-https
           - ca-certificates
           - software-properties-common
+          - python3-pip
+          - python3-openshift
+          - python3-kubernetes
+          #- python3-PyYAML
         state: present
 
     ##################################################################
     # 2. Install K3s (Manual Download instead of curl | sh)
     ##################################################################
-    - name: Download K3s installation script
-      get_url:
-        url: "{{ k3s_install_script }}"
-        dest: /tmp/k3s_install.sh
-        mode: '0755'
 
-    - name: Run K3s installation script
-      command: /tmp/k3s_install.sh
-      args:
-        creates: /usr/local/bin/k3s
-
-    - name: Enable and start K3s service
-      service:
-        name: k3s
-        state: started
-        enabled: true
-
-    ##################################################################
-    # 3. Install Helm from Official Apt Repo (No piping from net)
-    ##################################################################
-    - name: Add GPG key for Helm
-      apt_key:
-        url: "https://baltocdn.com/helm/signing.asc"
-        state: present
-
-    - name: Add official Helm apt repository
-      apt_repository:
-        repo: "deb https://baltocdn.com/helm/stable/debian/ all main"
-        state: present
-
-    - name: Update apt cache (post-Helm repo add)
-      apt:
-        update_cache: yes
-
-    - name: Install Helm
-      apt:
-        name: helm
-        state: present
-
-    ##################################################################
-    # 4. Health Check: Ensure K3s is Running
-    ##################################################################
-    - name: Wait for K3s API Server to be ready
-      ansible.builtin.command: kubectl cluster-info
-      register: k3s_status
-      until: k3s_status.rc == 0
-      retries: 20
-      delay: 5
-      changed_when: false
-
-    - name: Ensure K3s systemd service is running
-      ansible.builtin.systemd:
-        name: k3s
-        state: started
-        enabled: true
-      register: k3s_service_status
-
-    - name: Fail if K3s is not running
-      ansible.builtin.fail:
-        msg: "K3s service is not running!"
-      when: k3s_service_status.status.ActiveState != "active"

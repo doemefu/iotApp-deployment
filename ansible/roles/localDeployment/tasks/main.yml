@@ -1,0 +1,64 @@
+---
+- name: "Apply traefik role"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/dfurchert/iotApp/k8s/00-traefik/traefik-role.yml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
+- name: "Apply traefik account"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/dfurchert/iotApp/k8s/00-traefik/traefik-account.yml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
+- name: "Apply traefik role-binding"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/dfurchert/iotApp/k8s/00-traefik/traefik-role-binding.yml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
+- name: "Apply traefik deployment"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/dfurchert/iotApp/k8s/00-traefik/traefik-deployment.yml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
+- name: "Apply traefik service"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/dfurchert/iotApp/k8s/00-traefik/traefik-service.yml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
+##################################################################
+# 3. Cert-Manager & Self-Signed Cert
+##################################################################
+- name: "Apply self-signed ClusterIssuer for local usage"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/dfurchert/iotApp/k8s/99-deployment-local/cluster-issuer-selfsigned.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
+- name: "Apply Certificate for 192.168.1.55"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/dfurchert/iotApp/k8s/99-deployment-local/certificate-local-ip.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"
+    # Make sure that certificate-local-ip.yaml has "namespace: kube-system"
+
+##################################################################
+# 4. Ingress for Grafana, Prometheus (Remove /traefik path)
+##################################################################
+- name: "Apply local dashboards ingress"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/dfurchert/iotApp/k8s/99-deployment-local/dashboards-ingress.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
+##################################################################
+# 5. IngressRoute for Traefik Dashboard
+##################################################################
+- name: "Apply Traefik IngressRoute for Dashboard"
+  kubernetes.core.k8s:
+    state: present
+    src: "/home/dfurchert/iotApp/k8s/99-deployment-local/traefik-dashboard-ingressroute.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"

@@ -1,64 +1,82 @@
----
-- hosts: raspberry
-  become: yes
-  gather_facts: yes
+- name: Cluster prep
+  hosts: k3s_cluster
+  gather_facts: true
+  become: true
+  roles:
+    - role: prereq
+    #- role: airgap
+    - role: raspberrypi
 
-  vars:
-    # Example pinned chart versions. Adjust as needed:
-    cert_manager_chart_version: "1.16.3"
-    prometheus_chart_version: "68.4.4"
+- name: Setup K3S server
+  hosts: server
+  become: true
+  roles:
+    - role: k3s_server
 
-    # Where K3s placed the kubeconfig:
-    kubeconfig_path: "/etc/rancher/k3s/k3s.yaml"
+- name: Setup K3S agent
+  hosts: agent
+  become: true
+  roles:
+    - role: k3s_agent
 
+##################################################################
+# 3. Install Helm from Official Apt Repo (No piping from net)
+##################################################################
+- name: Install Helm on K3s Server
+  hosts: k3s_server  # Ensure these tasks run only on K3s server nodes
+  become: true
   tasks:
-
-    ##################################################################
-    # 1. Add and Update Helm Repositories
-    ##################################################################
-    - name: Add or Update Helm repository for Jetstack
-      kubernetes.core.helm_repository:
-        name: jetstack
-        repo_url: "https://charts.jetstack.io"
-        force_update: true
-
-    - name: Add or Update Prometheus Helm repository
-      kubernetes.core.helm_repository:
-        name: prometheus-community
-        repo_url: "https://prometheus-community.github.io/helm-charts"
-        force_update: true
-
-    ##################################################################
-    # 3. Install or Upgrade Cert-Manager
-    ##################################################################
-    - name: Install or upgrade cert-manager
-      kubernetes.core.helm:
-        name: cert-manager
-        chart_ref: jetstack/cert-manager
-        chart_version: "{{ cert_manager_chart_version }}"
-        release_namespace: cert-manager
-        create_namespace: true
+    - name: Add GPG key for Helm
+      apt_key:
+        url: "https://baltocdn.com/helm/signing.asc"
         state: present
-        kubeconfig: "{{ kubeconfig_path }}"
-        wait: true
-        values:
-          crds:
-            enabled: true
 
-    ##################################################################
-    # 4. Install Prometheus & Grafana
-    ##################################################################
-    - name: Install Prometheus
-      kubernetes.core.helm:
-        name: prometheus
-        chart_ref: prometheus-community/kube-prometheus-stack
-        chart_version: "{{ prometheus_chart_version }}"
-        release_namespace: monitoring
-        create_namespace: true
+    - name: Add official Helm apt repository
+      apt_repository:
+        repo: "deb https://baltocdn.com/helm/stable/debian/ all main"
         state: present
-        kubeconfig: "{{ kubeconfig_path }}"
-        wait: true
-        values:
-          prometheus:
-            prometheusSpec:
-              serviceMonitorSelector: {}
+
+    - name: Install Helm
+      apt:
+        name: helm
+        state: present
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+##################################################################
+# 4. Health Check: Ensure K3s is Running
+##################################################################
+
+    - name: Wait for K3s API Server to be ready
+      ansible.builtin.command: kubectl cluster-info
+      register: k3s_status
+      until: k3s_status.rc == 0
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    - name: Ensure K3s systemd service is running
+      ansible.builtin.systemd:
+        name: k3s
+        state: started
+        enabled: true
+      register: k3s_service_status
+
+    - name: Fail if K3s is not running
+      ansible.builtin.fail:
+        msg: "K3s service is not running!"
+      when: k3s_service_status.status.ActiveState != "active"
+
+    - name: Install Gateway API CRDs
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "/etc/rancher/k3s/k3s.yaml"
+        src: "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml"
+
+    - name: Install Traefik RBACs
+      kubernetes.core.k8s:
+        state: present
+        kubeconfig: "/etc/rancher/k3s/k3s.yaml"
+        src: "https://raw.githubusercontent.com/traefik/traefik/v3.3/docs/content/reference/dynamic-configuration/kubernetes-gateway-rbac.yml"

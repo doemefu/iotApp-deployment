@@ -1,0 +1,23 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+  namespace: kube-system
+spec:
+  entryPoints:
+    # 'websecure' is typically port 443 in Traefik’s config (if you want TLS).
+    # If you'd rather do HTTP only, replace with 'web' and remove the 'tls' block below.
+    - websecure
+
+  routes:
+    - kind: Rule
+      # Ensure you match the desired hostname + path prefix.
+      # e.g., Host(`raspi5.local`) && PathPrefix(`/traefik`)
+      match: Host(`raspi5.local`) && PathPrefix(`/traefik`)
+      services:
+        - kind: TraefikService
+          name: api@internal
+
+  # If you want TLS on 'websecure', specify which secret to use:
+  tls:
+    secretName: local-ip-tls   # Must exist in kube-system namespace

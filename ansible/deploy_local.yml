@@ -1,0 +1,76 @@
+---
+- hosts: k3s_cluster
+  become: yes
+  gather_facts: yes
+
+  vars:
+    kubeconfig_path: "/etc/rancher/k3s/k3s.yaml"
+
+  tasks:
+
+    - name: "Apply whoami deployment"
+      kubernetes.core.k8s:
+        state: present
+        src: "/home/dfurchert/iotApp/k8s/xx-whoami/whoami-deployment.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: "Apply whoami service"
+      kubernetes.core.k8s:
+        state: present
+        src: "/home/dfurchert/iotApp/k8s/xx-whoami/whoami-service.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    ##################################################################
+    # 3. Cert-Manager & Self-Signed Cert
+    ##################################################################
+    - name: "Apply self-signed ClusterIssuer for local usage"
+      kubernetes.core.k8s:
+        state: present
+        src: "/home/dfurchert/iotApp/k8s/99-deployment-local/cluster-issuer-selfsigned.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+#
+    - name: "Wait for ClusterIssuer to be available"
+      command: kubectl wait --for=condition=Ready clusterissuer/local-selfsigned --timeout=30s
+      changed_when: false
+      failed_when: false
+#
+#    - name: "Apply Certificate for 192.168.1.55"
+#      kubernetes.core.k8s:
+#        state: present
+#        src: "/home/dfurchert/iotApp/k8s/99-deployment-local/certificate-local-ip.yaml"
+#        kubeconfig: "{{ kubeconfig_path }}"
+#        # Make sure that certificate-local-ip.yaml has "namespace: kube-system"
+#
+#    - name: "Apply https redirect"
+#      kubernetes.core.k8s:
+#        state: present
+#        src: "/home/dfurchert/iotApp/k8s/99-deployment-local/redirect-https.yaml"
+#        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: "Apply traefik dashboard service"
+      kubernetes.core.k8s:
+        state: present
+        src: "/home/dfurchert/iotApp/k8s/00-traefik/traefik-service.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: "Apply whoami ingress"
+      kubernetes.core.k8s:
+        state: present
+        src: "/home/dfurchert/iotApp/k8s/xx-whoami/whoami-ingress.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: "Apply grafana ingress"
+      kubernetes.core.k8s:
+        state: present
+        src: "/home/dfurchert/iotApp/k8s/91-grafana/grafana-ingress.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
+
+
+
+
+#    - name: "Apply traefik dashboard ingress"
+#      kubernetes.core.k8s:
+#        state: present
+#        src: "/home/dfurchert/iotApp/k8s/00-traefik/traefik-ingress.yaml"
+#        kubeconfig: "{{ kubeconfig_path }}"

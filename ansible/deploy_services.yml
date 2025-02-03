@@ -1,5 +1,5 @@
 ---
-- hosts: raspberry
+- hosts: k3s_cluster
   become: yes
   gather_facts: yes
 
@@ -21,11 +21,10 @@
 
   tasks:
     ##################################################################
-    # 4. Create GHCR Docker Registry Secret
+    # 1. Create GHCR Docker Registry Secret
     ##################################################################
     - name: Create GHCR registry secret in default namespace
       become: yes
-      become_user: k3sadmin
       kubernetes.core.k8s:
         state: present
         namespace: iot
@@ -38,29 +37,15 @@
           type: kubernetes.io/dockerconfigjson
           data:
             .dockerconfigjson: "{{ lookup('template', 'dockerconfig.json.j2') | b64encode }}"
-
-    ##################################################################
-    # 5. Create namespaces (example: 'iot' or 'iotApp')
-    ##################################################################
-    - name: Ensure "iot" namespace exists
-      become: yes
-      become_user: k3sadmin
-      kubernetes.core.k8s:
-        name: iot
-        api_version: v1
-        kind: Namespace
-        state: present
-
     ##################################################################
     # 6. Copy K8s manifests to the Raspberry Pi
     ##################################################################
     - name: Copy all K8s manifests
       copy:
         src: ../k8s/
-        dest: /home/ubuntu/k8s/
-
+        dest: /home/dfurchert/iotApp/k8s/
     ##################################################################
-    # 7. Start Infrastructure (PostgreSQL, InfluxDB, Mosquitto)
+    # 2. Start Infrastructure (PostgreSQL, InfluxDB, Mosquitto)
     ##################################################################
     - name: Start infrastructure services
       include_role:
@@ -71,14 +56,14 @@
         MOSQUITTO_HOST: "{{ MOSQUITTO_HOST }}"
 
     ##################################################################
-    # 8. Set up InfluxDB Buckets
+    # 3. Set up InfluxDB Buckets
     ##################################################################
     - name: Set up InfluxDB (wait and create buckets)
       include_role:
         name: setUpInflux
 
     ##################################################################
-    # 9. Start Application Services
+    # 4. Start Application Services
     ##################################################################
     - name: Start all backend application services
       include_role:
@@ -87,7 +72,7 @@
         APP_SERVICES: "{{ APP_SERVICES }}"
 
     ##################################################################
-    # 10. Start Frontend Services
+    # 5. Start Frontend Services
     ##################################################################
     - name: Start all frontend services
       include_role:

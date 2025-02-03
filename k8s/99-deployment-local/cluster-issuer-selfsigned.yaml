@@ -1,0 +1,8 @@
+# file: cluster-issuer-selfsigned.yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: local-selfsigned
+  namespace: kube-system
+spec:
+  selfSigned: {}

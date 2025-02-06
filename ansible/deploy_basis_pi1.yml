@@ -12,7 +12,6 @@
     kubeconfig_path: "/etc/rancher/k3s/k3s.yaml"
 
   tasks:
-
     ##################################################################
     # 1. Add and Update Helm Repositories
     ##################################################################
@@ -41,7 +40,6 @@
       kubernetes.core.helm:
         release_name: traefik
         chart_ref: traefik/traefik
-        #chart_version: "{{ cert_manager_chart_version }}"
         release_namespace: traefik
         create_namespace: true
         state: present
@@ -50,9 +48,7 @@
         values:
           dashboard:
             enabled: true
-            domain: "raspi5.local"   # if you want the dashboard exposed via a specific hostname
-
-          # Configure entrypoints as needed.
+            domain: traefik.furchert.ch   # Changed from raspi5.local to public domain
           entryPoints:
             web:
               address: ":80"
@@ -60,25 +56,20 @@
               address: ":443"
             traefik:
               address: ":9000"
-
-          # If you need to pass extra arguments:
           additionalArguments:
-            - "--api.insecure=true"      # if you need an insecure API for testing
-            - "--api.dashboard=true"
-
-          # (Optionally) Configure your providers – for example, if you want to use CRDs for dynamic configuration:
+            - --api.insecure=true      # Insecure API for testing; adjust as needed
+            - --api.dashboard=true
           providers:
-            kubernetesCRD: { }
-            kubernetesIngress: { }
+            kubernetesCRD: {}
+            kubernetesIngress: {}
 
     ##################################################################
-    # 2. Install or Upgrade Cert-Manager
+    # 3. Install or Upgrade Cert-Manager
     ##################################################################
     - name: Install or upgrade cert-manager
       kubernetes.core.helm:
         release_name: cert-manager
         chart_ref: jetstack/cert-manager
-        #chart_version: "{{ cert_manager_chart_version }}"
         release_namespace: cert-manager
         create_namespace: true
         state: present
@@ -88,8 +79,24 @@
           crds:
             enabled: true
 
+    - name: Copy  K8s manifests
+      copy:
+        src: ../k8s/98-deployment-prod/
+        dest: /home/dfurchert/iotAppNew/k8s/98-deployment-prod/
+
+    - name: Deploy ClusterIssuer for Let's Encrypt
+      kubernetes.core.k8s:
+        state: present
+        src: /home/dfurchert/iotAppNew/k8s/98-deployment-prod/cluster-issuer.yaml
+        kubeconfig: "{{ kubeconfig_path }}"
+
+    - name: "Wait for ClusterIssuer to be available"
+      command: kubectl wait --for=condition=Ready clusterissuer/letsencrypt-prod --timeout=30s
+      changed_when: false
+      failed_when: false
+
     ##################################################################
-    # 3. Install Prometheus & Grafana
+    # 4. Install kube-prometheus-stack (Grafana & Prometheus)
     ##################################################################
     - name: Install kube-prometheus-stack chart
       kubernetes.core.helm:
@@ -101,54 +108,49 @@
         state: present
         kubeconfig: "{{ kubeconfig_path }}"
         wait: true
-
-        # 'values' for subpath serving of Grafana
         values:
-          # ----- Grafana sub-path (/grafana) -----
+          # ----- Grafana Configuration -----
           grafana:
-            grafana.ini:
-              server:
-                root_url: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
-                serve_from_sub_path: "true"
+            # Remove custom subpath settings so Grafana uses its default installation setup.
             ingress:
               enabled: true
               annotations:
                 kubernetes.io/ingress.class: "traefik"
+                cert-manager.io/cluster-issuer: letsencrypt-prod
               hosts:
-                - raspi5.local
-              path: /grafana
+                - grafana.furchert.ch   # Expose Grafana on its dedicated subdomain.
+              path: /
               pathType: Prefix
+              tls:
+                - hosts:
+                    - grafana.furchert.ch
+                  secretName: grafana-tls
 
-          # ----- Prometheus sub-path (/prometheus) -----
+
+          # ----- Prometheus Configuration -----
           prometheus:
-            # Let the chart manage its own Ingress:
+            # Remove custom routePrefix/externalUrl settings for standard Prometheus behavior.
             ingress:
               enabled: true
               annotations:
                 kubernetes.io/ingress.class: "traefik"
+                cert-manager.io/cluster-issuer: letsencrypt-prod
               hosts:
-                - raspi5.local
-              path: /prometheus
+                - prometheus.furchert.ch   # Change host from raspi5.local to public domain.
+              path: /
               pathType: Prefix
+              tls:
+                - hosts:
+                    - prometheus.furchert.ch
+                  secretName: prometheus-tls
 
-            prometheusSpec:
-              # Tell Prometheus that it is being served from /prometheus
-              # so it knows how to build links, static asset URLs, etc.
-              routePrefix: "/prometheus"
-              externalUrl: "http://raspi5.local/prometheus"
-
-        ##################################################################
-    # 4. Setup Traefik Dashboard
-    ##################################################################
-    - name: Copy traefik dashboard manifest
+    - name: Copy all K8s manifests
       copy:
-        src: ../k8s/00-traefik/traefik-dashboard.yaml
-        dest: /home/raspi5Admin/iotApp/k8s/00-traefik/traefik-dashboard.yaml
+        src: ../k8s/00-traefik/
+        dest: /home/dfurchert/iotAppNew/k8s/00-traefik/
 
-    - name: Deploy Traefik dashboard IngressRoute
+    - name: "Apply traefik dashboard service"
       kubernetes.core.k8s:
         state: present
-        namespace: traefik
-        src: /home/raspi5Admin/iotApp/k8s/00-traefik/traefik-dashboard.yaml
-        kubeconfig: /etc/rancher/k3s/k3s.yaml
-
+        src: "/home/dfurchert/iotAppNew/k8s/00-traefik/traefik-dashboard.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"

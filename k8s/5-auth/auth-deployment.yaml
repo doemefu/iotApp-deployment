@@ -17,7 +17,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: auth-service
-          image: ghcr.io/your-repo/auth-service:latest
+          image: ghcr.io/doemefu/auth-service:main
           env:
             - name: TZ
               value: "Europe/Zurich"

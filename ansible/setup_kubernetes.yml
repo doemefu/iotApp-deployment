@@ -23,7 +23,7 @@
 # 3. Install Helm from Official Apt Repo (No piping from net)
 ##################################################################
 - name: Install Helm on K3s Server
-  hosts: k3s_server  # Ensure these tasks run only on K3s server nodes
+  hosts: server  # Ensure these tasks run only on K3s server nodes
   become: true
   tasks:
     - name: Add GPG key for Helm
@@ -36,16 +36,16 @@
         repo: "deb https://baltocdn.com/helm/stable/debian/ all main"
         state: present
 
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
     - name: Install Helm
       apt:
         name: helm
         state: present
 
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-
-##################################################################
+    ##################################################################
 # 4. Health Check: Ensure K3s is Running
 ##################################################################
 

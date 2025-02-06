@@ -6,25 +6,25 @@
   kubernetes.core.k8s:
     state: present
     namespace: iot
-    definition: "{{ lookup('file', '/home/dfurchert/iotApp/k8s/4-user-management/deployment.yaml') | from_yaml }}"
+    src: "/home/dfurchert/iotAppNew/k8s/4-user-management/deployment.yaml"
 
 - name: Deploy auth service
   kubernetes.core.k8s:
     state: present
     namespace: iot
-    definition: "{{ lookup('file', '/home/dfurchert/iotApp/k8s/5-auth/deployment.yaml') | from_yaml }}"
+    src: "/home/dfurchert/iotAppNew/k8s/5-auth/deployment.yaml"
 
 - name: Deploy device management service
   kubernetes.core.k8s:
     state: present
     namespace: iot
-    definition: "{{ lookup('file', '/home/dfurchert/iotApp/k8s/6-device-management/deployment.yaml') | from_yaml }}"
+    src: "/home/dfurchert/iotAppNew/k8s/6-device-management/deployment.yaml"
 
 - name: Deploy data processing service
   kubernetes.core.k8s:
     state: present
     namespace: iot
-    definition: "{{ lookup('file', '/home/dfurchert/iotApp/k8s/7-data-processing/deployment.yaml') | from_yaml }}"
+    src: "/home/dfurchert/iotAppNew/k8s/7-data-processing/deployment.yaml"
 
 ##################################################################
 # 2. Wait for Application Services to be Ready

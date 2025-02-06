@@ -1,24 +1,49 @@
 ---
 ##################################################################
-# 1. Deploy Infrastructure Services
+# 1. Deploy Infrastructure Services (Deployments + Services)
 ##################################################################
+
+- name: Deploy PostgreSQL deployment
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    src: "/home/dfurchert/iotAppNew/k8s/1-postgres/postgres-deployment.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
 - name: Deploy PostgreSQL service
   kubernetes.core.k8s:
     state: present
     namespace: iot
-    definition: "{{ lookup('file', '/home/ubuntu/k8s/1-postgres/postgres-deployment.yaml') | from_yaml }}"
+    src: "/home/dfurchert/iotAppNew/k8s/1-postgres/postgres-service.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
+- name: Deploy InfluxDB deployment
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    src: "/home/dfurchert/iotAppNew/k8s/2-influx/influx-deployment.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"
 
 - name: Deploy InfluxDB service
   kubernetes.core.k8s:
     state: present
     namespace: iot
-    definition: "{{ lookup('file', '/home/ubuntu/k8s/2-influx/influx-deployment.yaml') | from_yaml }}"
+    src: "/home/dfurchert/iotAppNew/k8s/2-influx/influx-service.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"
+
+- name: Deploy Mosquitto deployment
+  kubernetes.core.k8s:
+    state: present
+    namespace: iot
+    src: "/home/dfurchert/iotAppNew/k8s/3-mosquitto/mosquitto-deployment.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"
 
 - name: Deploy Mosquitto service
   kubernetes.core.k8s:
     state: present
     namespace: iot
-    definition: "{{ lookup('file', '/home/ubuntu/k8s/3-mosquitto/mosquitto-deployment.yaml') | from_yaml }}"
+    src: "/home/dfurchert/iotAppNew/k8s/3-mosquitto/mosquitto-service.yaml"
+    kubeconfig: "{{ kubeconfig_path }}"
 
 ##################################################################
 # 2. Wait for infrastructure services to be ready

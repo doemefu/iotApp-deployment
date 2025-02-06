@@ -4,6 +4,7 @@
   gather_facts: yes
 
   vars:
+    kubeconfig_path: "/etc/rancher/k3s/k3s.yaml"
     ghcr_username: ""  # Your GitHub username
     ghcr_pat: ""  # Your GitHub Personal Access Token (PAT)
     INFLUXDB_HOST: "http://influxdb.iot.svc.cluster.local:8086"
@@ -20,30 +21,24 @@
         url: "http://data-processing-service.iot.svc.cluster.local:8080/health"
 
   tasks:
-    ##################################################################
-    # 1. Create GHCR Docker Registry Secret
-    ##################################################################
-    - name: Create GHCR registry secret in default namespace
-      become: yes
-      kubernetes.core.k8s:
-        state: present
-        namespace: iot
-        definition:
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: ghcr-secret
-            namespace: iot
-          type: kubernetes.io/dockerconfigjson
-          data:
-            .dockerconfigjson: "{{ lookup('template', 'dockerconfig.json.j2') | b64encode }}"
+
     ##################################################################
     # 6. Copy K8s manifests to the Raspberry Pi
     ##################################################################
     - name: Copy all K8s manifests
       copy:
         src: ../k8s/
-        dest: /home/dfurchert/iotApp/k8s/
+        dest: /home/dfurchert/iotAppNew/k8s/
+
+
+    - name: Apply Secrets
+      kubernetes.core.k8s:
+        state: present
+        namespace: iot
+        create_namespace: true
+        src: "/home/dfurchert/iotAppNew/k8s/secrets.yaml"
+        kubeconfig: "{{ kubeconfig_path }}"
+
     ##################################################################
     # 2. Start Infrastructure (PostgreSQL, InfluxDB, Mosquitto)
     ##################################################################
@@ -65,15 +60,15 @@
     ##################################################################
     # 4. Start Application Services
     ##################################################################
-    - name: Start all backend application services
-      include_role:
-        name: startApplications
-      vars:
-        APP_SERVICES: "{{ APP_SERVICES }}"
-
-    ##################################################################
-    # 5. Start Frontend Services
-    ##################################################################
-    - name: Start all frontend services
-      include_role:
-        name: startFrontend
+#    - name: Start all backend application services
+#      include_role:
+#        name: startApplications
+#      vars:
+#        APP_SERVICES: "{{ APP_SERVICES }}"
+#
+#    ##################################################################
+#    # 5. Start Frontend Services
+#    ##################################################################
+#    - name: Start all frontend services
+#      include_role:
+#        name: startFrontend

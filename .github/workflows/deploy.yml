@@ -1,0 +1,27 @@
+name: Deploy to Pi
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Install Ansible
+        run: sudo apt-get update && sudo apt-get install -y ansible sshpass
+
+      - name: Deploy with Ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+          GHCR_USER: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PASS: ${{ secrets.GHCR_PAT }}
+          PI_SUDO_PASS: ${{ secrets.PI_SUDO_PASS }}
+        run: |
+          ansible-playbook -i ansible/inventory/hosts.ini \
+            ansible/deploy-services.yml \
+            --extra-vars "ghcr_username=${GHCR_USER} ghcr_password=${GHCR_PASS} ansible_sudo_pass=${PI_SUDO_PASS}"

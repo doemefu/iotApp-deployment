@@ -52,12 +52,13 @@
           - ca-certificates
           - software-properties-common
           - python3-pip
-          - python3-openshift
+          #- python3-openshift
           - python3-kubernetes
-          #- python3-PyYAML
+          - rfkill
         state: present
 
     ##################################################################
-    # 2. Install K3s (Manual Download instead of curl | sh)
+    # 2. Turn off Wi-Fi
     ##################################################################
-
+    - name: Disable Wi-Fi
+      command: rfkill block wifi
